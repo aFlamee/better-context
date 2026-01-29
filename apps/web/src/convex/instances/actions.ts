@@ -1,6 +1,7 @@
 'use node';
 
 import { Daytona, type Sandbox } from '@daytonaio/sdk';
+import { BTCA_SNAPSHOT_NAME } from 'btca-sandbox/shared';
 import { v } from 'convex/values';
 
 import { api, internal } from '../_generated/api';
@@ -11,8 +12,6 @@ import { instances } from '../apiHelpers';
 
 const instanceQueries = instances.queries;
 const instanceMutations = instances.mutations;
-
-const BTCA_SNAPSHOT_NAME = 'btca-app-sandbox';
 const BTCA_SERVER_PORT = 3000;
 const SANDBOX_IDLE_MINUTES = 2;
 const DEFAULT_MODEL = 'claude-haiku-4-5';
@@ -111,11 +110,15 @@ function parseVersion(output: string): string | undefined {
 
 async function getResourceConfigs(
 	ctx: ActionCtx,
-	instanceId: Id<'instances'>
+	instanceId: Id<'instances'>,
+	projectId?: Id<'projects'>
 ): Promise<ResourceConfig[]> {
-	const resources = await ctx.runQuery(api.resources.listAvailableInternal, {
-		instanceId
-	});
+	// If projectId is provided, get project-specific resources
+	// Otherwise fall back to instance-level resources (for backwards compatibility)
+	const resources = projectId
+		? await ctx.runQuery(internal.resources.listAvailableForProject, { projectId })
+		: await ctx.runQuery(internal.resources.listAvailableInternal, { instanceId });
+
 	const merged = new Map<string, ResourceConfig>();
 	for (const resource of [...resources.global, ...resources.custom]) {
 		merged.set(resource.name, {
@@ -208,6 +211,7 @@ async function fetchLatestVersion(packageName: string): Promise<string | undefin
 
 export const provision = action({
 	args: instanceArgs,
+	returns: v.object({ sandboxId: v.string() }),
 	handler: async (ctx, args) => {
 		requireEnv('OPENCODE_API_KEY');
 
@@ -306,22 +310,36 @@ export const provision = action({
 });
 
 export const wake = action({
-	args: instanceArgs,
-	handler: async (ctx, args) => wakeInstanceInternal(ctx, args.instanceId)
+	args: {
+		instanceId: v.id('instances'),
+		projectId: v.optional(v.id('projects'))
+	},
+	returns: v.object({ serverUrl: v.string() }),
+	handler: async (ctx, args) => wakeInstanceInternal(ctx, args.instanceId, args.projectId)
 });
 
 export const stop = action({
 	args: instanceArgs,
+	returns: v.object({ stopped: v.boolean() }),
 	handler: async (ctx, args) => stopInstanceInternal(ctx, args.instanceId)
 });
 
 export const update = action({
 	args: instanceArgs,
+	returns: v.object({
+		serverUrl: v.optional(v.string()),
+		updated: v.optional(v.boolean())
+	}),
 	handler: async (ctx, args) => updateInstanceInternal(ctx, args.instanceId)
 });
 
 export const checkVersions = action({
 	args: instanceArgs,
+	returns: v.object({
+		latestBtca: v.optional(v.string()),
+		latestOpencode: v.optional(v.string()),
+		updateAvailable: v.boolean()
+	}),
 	handler: async (ctx, args) => {
 		const instance = await requireInstance(ctx, args.instanceId);
 		const [latestBtca, latestOpencode] = await Promise.all([
@@ -351,6 +369,7 @@ export const checkVersions = action({
 
 export const destroy = action({
 	args: instanceArgs,
+	returns: v.object({ destroyed: v.boolean() }),
 	handler: async (ctx, args) => {
 		const instance = await requireInstance(ctx, args.instanceId);
 		const sandboxId = instance.sandboxId;
@@ -401,15 +420,58 @@ async function requireAuthenticatedInstance(ctx: ActionCtx): Promise<Doc<'instan
 	return instance;
 }
 
+async function createSandboxFromScratch(
+	ctx: ActionCtx,
+	instanceId: Id<'instances'>,
+	instance: Doc<'instances'>
+): Promise<{ sandbox: Sandbox; serverUrl: string }> {
+	requireEnv('OPENCODE_API_KEY');
+
+	const resources = await getResourceConfigs(ctx, instanceId);
+	const daytona = getDaytona();
+	const sandbox = await daytona.create({
+		snapshot: BTCA_SNAPSHOT_NAME,
+		autoStopInterval: SANDBOX_IDLE_MINUTES,
+		envVars: {
+			NODE_ENV: 'production',
+			OPENCODE_API_KEY: requireEnv('OPENCODE_API_KEY')
+		},
+		public: true
+	});
+
+	await uploadBtcaConfig(sandbox, resources);
+	const serverUrl = await startBtcaServer(sandbox);
+
+	const versions = await getInstalledVersions(sandbox);
+
+	await ctx.runMutation(instanceMutations.setProvisioned, {
+		instanceId,
+		sandboxId: sandbox.id,
+		btcaVersion: versions.btcaVersion,
+		opencodeVersion: versions.opencodeVersion
+	});
+
+	await ctx.scheduler.runAfter(0, internal.analytics.trackEvent, {
+		distinctId: instance.clerkId,
+		event: AnalyticsEvents.SANDBOX_PROVISIONED,
+		properties: {
+			instanceId,
+			sandboxId: sandbox.id,
+			btcaVersion: versions.btcaVersion,
+			opencodeVersion: versions.opencodeVersion,
+			createdDuringWake: true
+		}
+	});
+
+	return { sandbox, serverUrl };
+}
+
 async function wakeInstanceInternal(
 	ctx: ActionCtx,
-	instanceId: Id<'instances'>
+	instanceId: Id<'instances'>,
+	projectId?: Id<'projects'>
 ): Promise<{ serverUrl: string }> {
 	const instance = await requireInstance(ctx, instanceId);
-	if (!instance.sandboxId) {
-		throw new Error('Instance does not have a sandbox to wake');
-	}
-
 	const wakeStartedAt = Date.now();
 
 	await ctx.scheduler.runAfter(0, internal.analytics.trackEvent, {
@@ -417,7 +479,7 @@ async function wakeInstanceInternal(
 		event: AnalyticsEvents.SANDBOX_WAKE_STARTED,
 		properties: {
 			instanceId,
-			sandboxId: instance.sandboxId
+			sandboxId: instance.sandboxId ?? null
 		}
 	});
 
@@ -427,13 +489,24 @@ async function wakeInstanceInternal(
 	});
 
 	try {
-		const resources = await getResourceConfigs(ctx, instanceId);
-		const daytona = getDaytona();
-		const sandbox = await daytona.get(instance.sandboxId);
+		let serverUrl: string;
+		let sandboxId: string;
 
-		await ensureSandboxStarted(sandbox);
-		await uploadBtcaConfig(sandbox, resources);
-		const serverUrl = await startBtcaServer(sandbox);
+		if (!instance.sandboxId) {
+			const result = await createSandboxFromScratch(ctx, instanceId, instance);
+			serverUrl = result.serverUrl;
+			sandboxId = result.sandbox.id;
+		} else {
+			// Use project-specific resources if projectId is provided
+			const resources = await getResourceConfigs(ctx, instanceId, projectId);
+			const daytona = getDaytona();
+			const sandbox = await daytona.get(instance.sandboxId);
+
+			await ensureSandboxStarted(sandbox);
+			await uploadBtcaConfig(sandbox, resources);
+			serverUrl = await startBtcaServer(sandbox);
+			sandboxId = instance.sandboxId;
+		}
 
 		await ctx.runMutation(instanceMutations.setServerUrl, { instanceId, serverUrl });
 		await ctx.runMutation(instanceMutations.updateState, { instanceId, state: 'running' });
@@ -445,8 +518,9 @@ async function wakeInstanceInternal(
 			event: AnalyticsEvents.SANDBOX_WOKE,
 			properties: {
 				instanceId,
-				sandboxId: instance.sandboxId,
-				durationMs
+				sandboxId,
+				durationMs,
+				createdNewSandbox: !instance.sandboxId
 			}
 		});
 
@@ -550,6 +624,7 @@ async function updateInstanceInternal(
 
 export const wakeMyInstance = action({
 	args: {},
+	returns: v.object({ serverUrl: v.string() }),
 	handler: async (ctx): Promise<{ serverUrl: string }> => {
 		const instance = await requireAuthenticatedInstance(ctx);
 		return wakeInstanceInternal(ctx, instance._id);
@@ -563,6 +638,10 @@ type EnsureInstanceResult = {
 
 export const ensureInstanceExists = action({
 	args: { clerkId: v.optional(v.string()) },
+	returns: v.object({
+		instanceId: v.id('instances'),
+		status: v.union(v.literal('created'), v.literal('exists'), v.literal('provisioning'))
+	}),
 	handler: async (ctx, args): Promise<EnsureInstanceResult> => {
 		let clerkId = args.clerkId;
 
@@ -598,6 +677,7 @@ export const ensureInstanceExists = action({
 
 export const stopMyInstance = action({
 	args: {},
+	returns: v.object({ stopped: v.boolean() }),
 	handler: async (ctx): Promise<{ stopped: boolean }> => {
 		const instance = await requireAuthenticatedInstance(ctx);
 		return stopInstanceInternal(ctx, instance._id);
@@ -606,6 +686,10 @@ export const stopMyInstance = action({
 
 export const updateMyInstance = action({
 	args: {},
+	returns: v.object({
+		serverUrl: v.optional(v.string()),
+		updated: v.optional(v.boolean())
+	}),
 	handler: async (ctx): Promise<{ serverUrl?: string; updated?: boolean }> => {
 		const instance = await requireAuthenticatedInstance(ctx);
 		return updateInstanceInternal(ctx, instance._id);
@@ -614,6 +698,7 @@ export const updateMyInstance = action({
 
 export const resetMyInstance = action({
 	args: {},
+	returns: v.object({ reset: v.boolean() }),
 	handler: async (ctx): Promise<{ reset: boolean }> => {
 		const instance = await requireAuthenticatedInstance(ctx);
 		const sandboxId = instance.sandboxId;
@@ -660,15 +745,20 @@ export const resetMyInstance = action({
 });
 
 export const syncResources = internalAction({
-	args: instanceArgs,
+	args: {
+		instanceId: v.id('instances'),
+		projectId: v.optional(v.id('projects'))
+	},
+	returns: v.object({ synced: v.boolean() }),
 	handler: async (ctx, args): Promise<{ synced: boolean }> => {
 		const instance = await requireInstance(ctx, args.instanceId);
-		if (!instance.sandboxId || instance.state !== 'running') {
+		if (!instance.sandboxId || instance.state !== 'running' || !instance.serverUrl) {
 			return { synced: false };
 		}
 
 		try {
-			const resources = await getResourceConfigs(ctx, args.instanceId);
+			// Get project-specific resources if projectId is provided
+			const resources = await getResourceConfigs(ctx, args.instanceId, args.projectId);
 			const daytona = getDaytona();
 			const sandbox = await daytona.get(instance.sandboxId);
 
@@ -676,7 +766,20 @@ export const syncResources = internalAction({
 				return { synced: false };
 			}
 
+			// Upload the config and reload the server
 			await uploadBtcaConfig(sandbox, resources);
+
+			// Tell the btca server to reload its config
+			const reloadResponse = await fetch(`${instance.serverUrl}/reload-config`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' }
+			});
+
+			if (!reloadResponse.ok) {
+				console.error('Failed to reload config:', await reloadResponse.text());
+				return { synced: false };
+			}
+
 			return { synced: true };
 		} catch (error) {
 			console.error('Failed to sync resources:', getErrorMessage(error));
@@ -756,6 +859,20 @@ async function getSandboxStatus(sandbox: Sandbox): Promise<SyncResult> {
 
 export const syncSandboxStatus = internalAction({
 	args: instanceArgs,
+	returns: v.union(
+		v.object({
+			storageUsedBytes: v.number(),
+			cachedResources: v.array(
+				v.object({
+					name: v.string(),
+					url: v.string(),
+					branch: v.string(),
+					sizeBytes: v.optional(v.number())
+				})
+			)
+		}),
+		v.null()
+	),
 	handler: async (ctx, args): Promise<SyncResult | null> => {
 		const instance = await requireInstance(ctx, args.instanceId);
 		if (!instance.sandboxId) {

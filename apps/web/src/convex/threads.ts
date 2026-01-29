@@ -5,22 +5,56 @@ import { internal } from './_generated/api';
 import { AnalyticsEvents } from './analyticsEvents';
 import { getAuthenticatedInstance, requireThreadOwnership } from './authHelpers';
 
+// Shared validators
+const threadValidator = v.object({
+	_id: v.id('threads'),
+	_creationTime: v.number(),
+	instanceId: v.id('instances'),
+	projectId: v.optional(v.id('projects')),
+	title: v.optional(v.string()),
+	createdAt: v.number(),
+	lastActivityAt: v.number()
+});
+
+const threadWithStreamingValidator = v.object({
+	_id: v.id('threads'),
+	_creationTime: v.number(),
+	instanceId: v.id('instances'),
+	projectId: v.optional(v.id('projects')),
+	title: v.optional(v.string()),
+	createdAt: v.number(),
+	lastActivityAt: v.number(),
+	isStreaming: v.boolean()
+});
+
 /**
- * List threads for the authenticated user's instance
+ * List threads for the authenticated user's instance, optionally filtered by project
  */
 export const list = query({
-	args: {},
-	handler: async (ctx) => {
+	args: {
+		projectId: v.optional(v.id('projects'))
+	},
+	returns: v.array(threadWithStreamingValidator),
+	handler: async (ctx, args) => {
 		const instance = await getAuthenticatedInstance(ctx);
 
-		const threads = await ctx.db
-			.query('threads')
-			.withIndex('by_instance', (q) => q.eq('instanceId', instance._id))
-			.collect();
+		let threads;
+		if (args.projectId) {
+			threads = await ctx.db
+				.query('threads')
+				.withIndex('by_project', (q) => q.eq('projectId', args.projectId))
+				.collect();
+			threads = threads.filter((t) => t.instanceId === instance._id);
+		} else {
+			threads = await ctx.db
+				.query('threads')
+				.withIndex('by_instance', (q) => q.eq('instanceId', instance._id))
+				.collect();
+		}
 
 		const activeStreamSessions = await ctx.db
 			.query('streamSessions')
-			.filter((q) => q.eq(q.field('status'), 'streaming'))
+			.withIndex('by_status', (q) => q.eq('status', 'streaming'))
 			.collect();
 
 		const streamingThreadIds = new Set(activeStreamSessions.map((s) => s.threadId.toString()));
@@ -34,11 +68,78 @@ export const list = query({
 	}
 });
 
+// Message content validator (same as schema)
+const btcaChunkValidator = v.union(
+	v.object({
+		type: v.literal('text'),
+		id: v.string(),
+		text: v.string()
+	}),
+	v.object({
+		type: v.literal('reasoning'),
+		id: v.string(),
+		text: v.string()
+	}),
+	v.object({
+		type: v.literal('tool'),
+		id: v.string(),
+		toolName: v.string(),
+		state: v.union(v.literal('pending'), v.literal('running'), v.literal('completed'))
+	}),
+	v.object({
+		type: v.literal('file'),
+		id: v.string(),
+		filePath: v.string()
+	})
+);
+
+const messageContentValidator = v.union(
+	v.string(),
+	v.object({
+		type: v.literal('chunks'),
+		chunks: v.array(btcaChunkValidator)
+	})
+);
+
+const messageValidator = v.object({
+	_id: v.id('messages'),
+	_creationTime: v.number(),
+	threadId: v.id('threads'),
+	role: v.union(v.literal('user'), v.literal('assistant'), v.literal('system')),
+	content: messageContentValidator,
+	resources: v.optional(v.array(v.string())),
+	canceled: v.optional(v.boolean()),
+	createdAt: v.number()
+});
+
 /**
  * Get a thread with its messages (requires ownership)
  */
 export const getWithMessages = query({
 	args: { threadId: v.id('threads') },
+	returns: v.union(
+		v.null(),
+		v.object({
+			_id: v.id('threads'),
+			_creationTime: v.number(),
+			instanceId: v.id('instances'),
+			projectId: v.optional(v.id('projects')),
+			title: v.optional(v.string()),
+			createdAt: v.number(),
+			lastActivityAt: v.number(),
+			messages: v.array(messageValidator),
+			resources: v.array(v.string()),
+			threadResources: v.array(v.string()),
+			activeStream: v.union(
+				v.null(),
+				v.object({
+					sessionId: v.string(),
+					messageId: v.id('messages'),
+					startedAt: v.number()
+				})
+			)
+		})
+	),
 	handler: async (ctx, args) => {
 		const { thread } = await requireThreadOwnership(ctx, args.threadId);
 
@@ -54,8 +155,9 @@ export const getWithMessages = query({
 
 		const activeStreamSession = await ctx.db
 			.query('streamSessions')
-			.withIndex('by_thread', (q) => q.eq('threadId', args.threadId))
-			.filter((q) => q.eq(q.field('status'), 'streaming'))
+			.withIndex('by_thread_and_status', (q) =>
+				q.eq('threadId', args.threadId).eq('status', 'streaming')
+			)
 			.first();
 
 		return {
@@ -79,13 +181,16 @@ export const getWithMessages = query({
  */
 export const create = mutation({
 	args: {
-		title: v.optional(v.string())
+		title: v.optional(v.string()),
+		projectId: v.optional(v.id('projects'))
 	},
+	returns: v.id('threads'),
 	handler: async (ctx, args) => {
 		const instance = await getAuthenticatedInstance(ctx);
 
 		const threadId = await ctx.db.insert('threads', {
 			instanceId: instance._id,
+			projectId: args.projectId,
 			title: args.title,
 			createdAt: Date.now(),
 			lastActivityAt: Date.now()
@@ -109,6 +214,7 @@ export const create = mutation({
  */
 export const remove = mutation({
 	args: { threadId: v.id('threads') },
+	returns: v.null(),
 	handler: async (ctx, args) => {
 		const { thread, instance } = await requireThreadOwnership(ctx, args.threadId);
 
@@ -141,6 +247,8 @@ export const remove = mutation({
 				messageCount: messages.length
 			}
 		});
+
+		return null;
 	}
 });
 
@@ -149,6 +257,7 @@ export const remove = mutation({
  */
 export const clearMessages = mutation({
 	args: { threadId: v.id('threads') },
+	returns: v.null(),
 	handler: async (ctx, args) => {
 		const { thread, instance } = await requireThreadOwnership(ctx, args.threadId);
 
@@ -170,6 +279,8 @@ export const clearMessages = mutation({
 				messageCount: messages.length
 			}
 		});
+
+		return null;
 	}
 });
 
@@ -181,9 +292,11 @@ export const updateTitle = mutation({
 		threadId: v.id('threads'),
 		title: v.string()
 	},
+	returns: v.null(),
 	handler: async (ctx, args) => {
 		await requireThreadOwnership(ctx, args.threadId);
 		await ctx.db.patch(args.threadId, { title: args.title });
+		return null;
 	}
 });
 
@@ -195,7 +308,9 @@ export const updateTitleInternal = internalMutation({
 		threadId: v.id('threads'),
 		title: v.string()
 	},
+	returns: v.null(),
 	handler: async (ctx, args) => {
 		await ctx.db.patch(args.threadId, { title: args.title });
+		return null;
 	}
 });

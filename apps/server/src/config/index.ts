@@ -52,8 +52,9 @@ const StoredConfigSchema = z.object({
 	dataDirectory: z.string().optional(),
 	providerTimeoutMs: z.number().int().positive().optional(),
 	resources: z.array(ResourceDefinitionSchema),
-	model: z.string(),
-	provider: z.string()
+	// Provider and model are optional - defaults are applied when loading
+	model: z.string().optional(),
+	provider: z.string().optional()
 });
 
 type StoredConfig = z.infer<typeof StoredConfigSchema>;
@@ -112,7 +113,6 @@ export namespace Config {
 
 	export type Service = {
 		resourcesDirectory: string;
-		collectionsDirectory: string;
 		resources: readonly ResourceDefinition[];
 		model: string;
 		provider: string;
@@ -123,6 +123,7 @@ export namespace Config {
 		addResource: (resource: ResourceDefinition) => Promise<ResourceDefinition>;
 		removeResource: (name: string) => Promise<void>;
 		clearResources: () => Promise<{ cleared: number }>;
+		reload: () => Promise<void>;
 	};
 
 	const expandHome = (path: string): string => {
@@ -475,14 +476,12 @@ export namespace Config {
 	 * @param globalConfig - The global config (always present)
 	 * @param projectConfig - The project config (null if not using project-level config)
 	 * @param resourcesDirectory - Directory for resource data
-	 * @param collectionsDirectory - Directory for collection data
 	 * @param configPath - Path to the config file to save (project if exists, else global)
 	 */
 	const makeService = (
 		globalConfig: StoredConfig,
 		projectConfig: StoredConfig | null,
 		resourcesDirectory: string,
-		collectionsDirectory: string,
 		configPath: string
 	): Service => {
 		// Track configs separately to avoid resource leakage
@@ -526,16 +525,15 @@ export namespace Config {
 
 		const service: Service = {
 			resourcesDirectory,
-			collectionsDirectory,
 			configPath,
 			get resources() {
 				return getMergedResources();
 			},
 			get model() {
-				return getActiveConfig().model;
+				return getActiveConfig().model ?? DEFAULT_MODEL;
 			},
 			get provider() {
-				return getActiveConfig().provider;
+				return getActiveConfig().provider ?? DEFAULT_PROVIDER;
 			},
 			get providerTimeoutMs() {
 				return getActiveConfig().providerTimeoutMs;
@@ -633,7 +631,7 @@ export namespace Config {
 			},
 
 			clearResources: async () => {
-				// Clear the resources and collections directories
+				// Clear the resources directory
 				let clearedCount = 0;
 
 				try {
@@ -646,17 +644,34 @@ export namespace Config {
 					// Directory might not exist
 				}
 
-				try {
-					const collectionsDir = await fs.readdir(collectionsDirectory).catch(() => []);
-					for (const item of collectionsDir) {
-						await fs.rm(`${collectionsDirectory}/${item}`, { recursive: true, force: true });
-					}
-				} catch {
-					// Directory might not exist
-				}
-
 				Metrics.info('config.resources.cleared', { count: clearedCount });
 				return { cleared: clearedCount };
+			},
+
+			reload: async () => {
+				// Reload the config file from disk
+				// configPath points to either project config (if it existed at startup) or global config
+				Metrics.info('config.reload.start', { configPath });
+
+				const configExists = await Bun.file(configPath).exists();
+				if (!configExists) {
+					Metrics.info('config.reload.skipped', { reason: 'file not found', configPath });
+					return;
+				}
+
+				const reloaded = await loadConfigFromPath(configPath);
+
+				// Update the appropriate config based on what we had at startup
+				if (currentProjectConfig !== null) {
+					currentProjectConfig = reloaded;
+				} else {
+					currentGlobalConfig = reloaded;
+				}
+
+				Metrics.info('config.reload.done', {
+					resources: reloaded.resources.length,
+					configPath
+				});
 			}
 		};
 
@@ -730,7 +745,6 @@ export namespace Config {
 				globalConfig,
 				projectConfig,
 				`${resolvedProjectDataDir}/resources`,
-				`${resolvedProjectDataDir}/collections`,
 				projectConfigPath
 			);
 		}
@@ -742,12 +756,6 @@ export namespace Config {
 			globalDataDir,
 			expandHome(GLOBAL_CONFIG_DIR)
 		);
-		return makeService(
-			globalConfig,
-			null,
-			`${resolvedGlobalDataDir}/resources`,
-			`${resolvedGlobalDataDir}/collections`,
-			globalConfigPath
-		);
+		return makeService(globalConfig, null, `${resolvedGlobalDataDir}/resources`, globalConfigPath);
 	};
 }
