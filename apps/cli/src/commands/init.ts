@@ -1,4 +1,6 @@
+import { Result } from 'better-result';
 import { Command } from 'commander';
+import select from '@inquirer/select';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import * as readline from 'readline';
@@ -13,96 +15,6 @@ const DEFAULT_MODEL = 'claude-haiku-4-5';
 const DEFAULT_PROVIDER = 'opencode';
 const MCP_API_KEY_URL = 'https://btca.dev/app/settings?tab=mcp';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Skill Templates
-// ─────────────────────────────────────────────────────────────────────────────
-
-const BTCA_REMOTE_SKILL_CONTENT = `---
-name: btca-remote
-description: Query cloud-hosted btca resources via MCP for source-first answers
----
-
-## What I do
-
-- Query btca's cloud-hosted resources through MCP
-- Provide source-first answers about technologies
-- Access resources provisioned in the btca dashboard
-
-## When to use me
-
-Use this skill when you need up-to-date information about technologies configured in the project's btca cloud instance.
-
-## Getting resources
-
-Check \`btca.remote.config.jsonc\` for the list of available resources in this project.
-
-## Workflow
-
-1. Call \`listResources\` to see available resources
-2. Call \`ask\` with your question and exact resource names from step 1
-
-## Rules
-
-- Always call \`listResources\` before \`ask\`
-- \`ask\` requires at least one resource in the \`resources\` array
-- Use only resource names returned by \`listResources\`
-- Include only resources relevant to the question
-
-## Common errors
-
-- "Invalid resources" -> re-run \`listResources\` and use exact names
-- "Instance is provisioning / error state" -> wait or retry after a minute
-- "Missing or invalid Authorization header" -> MCP auth is invalid; fix it in https://btca.dev/app/settings/
-- MCP server doesn't exist -> Prompt the user to set it up at https://btca.dev/app/settings/
-`;
-
-const BTCA_LOCAL_SKILL_CONTENT = `---
-name: btca-local
-description: Query local btca resources via CLI for source-first answers
----
-
-## What I do
-
-- Query locally-cloned resources using the btca CLI
-- Provide source-first answers about technologies stored in .btca/ or ~/.local/share/btca/
-
-## When to use me
-
-Use this skill when you need information about technologies stored in the project's local btca resources.
-
-## Getting resources
-
-Check \`btca.config.jsonc\` for the list of available resources in this project.
-
-## Commands
-
-Ask a question about one or more resources:
-
-\`\`\`bash
-# Single resource
-btca ask --resource <resource> --question "<question>"
-
-# Multiple resources
-btca ask --resource svelte --resource effect --question "How do I integrate Effect with Svelte?"
-
-# Using @mentions in the question
-btca ask --question "@svelte @tailwind How do I style components?"
-\`\`\`
-
-## Managing Resources
-
-\`\`\`bash
-# Add a git resource
-btca add https://github.com/owner/repo
-
-# Add a local directory
-btca add ./docs
-
-# Remove a resource
-btca remove <name>
-\`\`\`
-`;
-
 type SetupType = 'mcp' | 'cli';
 type StorageType = 'local' | 'global';
 
@@ -113,28 +25,43 @@ async function promptSelect<T extends string>(
 	question: string,
 	options: { label: string; value: T }[]
 ): Promise<T> {
-	return new Promise((resolve, reject) => {
-		const rl = readline.createInterface({
-			input: process.stdin,
-			output: process.stdout
-		});
+	if (options.length === 0) {
+		throw new Error('Invalid selection');
+	}
 
-		console.log(`\n${question}\n`);
-		options.forEach((opt, idx) => {
-			console.log(`  ${idx + 1}) ${opt.label}`);
-		});
-		console.log('');
+	if (!process.stdin.isTTY || !process.stdout.isTTY) {
+		return new Promise((resolve, reject) => {
+			const rl = readline.createInterface({
+				input: process.stdin,
+				output: process.stdout
+			});
 
-		rl.question('Enter number: ', (answer) => {
-			rl.close();
-			const num = parseInt(answer.trim(), 10);
-			if (isNaN(num) || num < 1 || num > options.length) {
-				reject(new Error('Invalid selection'));
-				return;
-			}
-			resolve(options[num - 1]!.value);
+			console.log(`\n${question}\n`);
+			options.forEach((opt, idx) => {
+				console.log(`  ${idx + 1}) ${opt.label}`);
+			});
+			console.log('');
+
+			rl.question('Enter number: ', (answer) => {
+				rl.close();
+				const num = parseInt(answer.trim(), 10);
+				if (isNaN(num) || num < 1 || num > options.length) {
+					reject(new Error('Invalid selection'));
+					return;
+				}
+				resolve(options[num - 1]!.value);
+			});
 		});
+	}
+
+	const selection = await select({
+		message: question,
+		choices: options.map((option) => ({
+			name: option.label,
+			value: option.value
+		}))
 	});
+	return selection as T;
 }
 
 /**
@@ -159,23 +86,20 @@ async function promptInput(question: string, defaultValue?: string): Promise<str
  * Check if a pattern is already in .gitignore (handles variations like .btca, .btca/, .btca/*).
  */
 async function isPatternInGitignore(dir: string, pattern: string): Promise<boolean> {
-	try {
-		const gitignorePath = path.join(dir, '.gitignore');
-		const content = await fs.readFile(gitignorePath, 'utf-8');
-		const lines = content.split('\n').map((line) => line.trim());
+	const gitignorePath = path.join(dir, '.gitignore');
+	const result = await Result.tryPromise(() => fs.readFile(gitignorePath, 'utf-8'));
+	if (Result.isError(result)) return false;
+	const lines = result.value.split('\n').map((line) => line.trim());
 
-		// Check for the pattern and common variations
-		const basePattern = pattern.replace(/\/$/, ''); // Remove trailing slash
-		const patterns = [basePattern, `${basePattern}/`, `${basePattern}/*`];
+	// Check for the pattern and common variations
+	const basePattern = pattern.replace(/\/$/, '');
+	const patterns = [basePattern, `${basePattern}/`, `${basePattern}/*`];
 
-		return lines.some((line) => {
-			// Skip comments and empty lines
-			if (line.startsWith('#') || line === '') return false;
-			return patterns.includes(line);
-		});
-	} catch {
-		return false;
-	}
+	return lines.some((line) => {
+		// Skip comments and empty lines
+		if (line.startsWith('#') || line === '') return false;
+		return patterns.includes(line);
+	});
 }
 
 /**
@@ -183,16 +107,10 @@ async function isPatternInGitignore(dir: string, pattern: string): Promise<boole
  */
 async function addToGitignore(dir: string, pattern: string, comment?: string): Promise<void> {
 	const gitignorePath = path.join(dir, '.gitignore');
-	let content = '';
-
-	try {
-		content = await fs.readFile(gitignorePath, 'utf-8');
-		// Ensure file ends with newline
-		if (!content.endsWith('\n')) {
-			content += '\n';
-		}
-	} catch {
-		// File doesn't exist, start fresh
+	const contentResult = await Result.tryPromise(() => fs.readFile(gitignorePath, 'utf-8'));
+	let content = Result.isOk(contentResult) ? contentResult.value : '';
+	if (content && !content.endsWith('\n')) {
+		content += '\n';
 	}
 
 	// Add comment and pattern
@@ -208,35 +126,16 @@ async function addToGitignore(dir: string, pattern: string, comment?: string): P
  * Check if directory is a git repository.
  */
 async function isGitRepo(dir: string): Promise<boolean> {
-	try {
-		await fs.access(path.join(dir, '.git'));
-		return true;
-	} catch {
-		return false;
-	}
+	const result = await Result.tryPromise(() => fs.access(path.join(dir, '.git')));
+	return Result.isOk(result);
 }
 
 /**
  * Check if a file exists.
  */
 async function fileExists(filePath: string): Promise<boolean> {
-	try {
-		await fs.access(filePath);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-/**
- * Create a skill file in .claude/skills/<skillName>/SKILL.md
- */
-async function createSkillFile(cwd: string, skillName: string, content: string): Promise<void> {
-	const skillDir = path.join(cwd, '.claude', 'skills', skillName);
-	const skillPath = path.join(skillDir, 'SKILL.md');
-
-	await fs.mkdir(skillDir, { recursive: true });
-	await fs.writeFile(skillPath, content, 'utf-8');
+	const result = await Result.tryPromise(() => fs.access(filePath));
+	return Result.isOk(result);
 }
 
 /**
@@ -257,7 +156,7 @@ export const initCommand = new Command('init')
 		const cwd = process.cwd();
 		const configPath = path.join(cwd, PROJECT_CONFIG_FILENAME);
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			// Step 1: Ask for setup type
 			const setupType = await promptSelect<SetupType>('Choose setup type:', [
 				{ label: 'MCP (cloud hosted resources)', value: 'mcp' },
@@ -271,7 +170,10 @@ export const initCommand = new Command('init')
 				// CLI Path
 				await handleCliSetup(cwd, configPath, options.force);
 			}
-		} catch (error) {
+		});
+
+		if (Result.isError(result)) {
+			const error = result.error;
 			if (error instanceof Error && error.message === 'Invalid selection') {
 				console.error('\nError: Invalid selection. Please run btca init again.');
 				process.exit(1);
@@ -346,11 +248,7 @@ async function handleMcpSetup(cwd: string, force?: boolean): Promise<void> {
 	await fs.writeFile(configPath, JSON.stringify(config, null, '\t'), 'utf-8');
 	console.log(`Created ${REMOTE_CONFIG_FILENAME}`);
 
-	// Step 4: Create skill file
-	await createSkillFile(cwd, 'btca-remote', BTCA_REMOTE_SKILL_CONTENT);
-	console.log('Created .claude/skills/btca-remote/SKILL.md');
-
-	// Step 5: Print next steps
+	// Step 4: Print next steps
 	console.log('\n--- Setup Complete (MCP) ---\n');
 	console.log('Next steps:');
 	console.log('  1. Add resources: btca remote add https://github.com/owner/repo');
@@ -415,10 +313,6 @@ async function handleCliSetup(cwd: string, configPath: string, force?: boolean):
 			console.log("If you initialize git later, add '.btca/' to your .gitignore.");
 		}
 	}
-
-	// Create skill file
-	await createSkillFile(cwd, 'btca-local', BTCA_LOCAL_SKILL_CONTENT);
-	console.log('Created .claude/skills/btca-local/SKILL.md');
 
 	// Print summary
 	if (storageType === 'local') {

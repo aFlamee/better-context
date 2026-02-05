@@ -1,10 +1,15 @@
 # dependencies (bun install)
 node_modules
 
+
+.claude/
+
 # output
 out
 dist
 *.tgz
+
+launch/
 
 .btca
 
