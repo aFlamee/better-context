@@ -12,7 +12,7 @@ import {
 	createClient,
 	getResourcesEffect
 } from '../client/index.ts';
-import { ensureServer } from '../server/manager.ts';
+import { ensureServerEffect } from '../server/manager.ts';
 import { runCliEffect } from '../effect/runtime.ts';
 import packageJson from '../../package.json';
 
@@ -311,11 +311,13 @@ export const runMcpServerCommand = (args: {
 	globalOpts?: { server?: string; port?: number };
 }) =>
 	Effect.tryPromise(async () => {
-		const serverManager = await ensureServer({
-			serverUrl: args.globalOpts?.server,
-			port: args.globalOpts?.port,
-			quiet: true
-		});
+		const serverManager = await runCliEffect(
+			ensureServerEffect({
+				serverUrl: args.globalOpts?.server,
+				port: args.globalOpts?.port,
+				quiet: true
+			})
+		);
 
 		const cleanup = () => {
 			try {

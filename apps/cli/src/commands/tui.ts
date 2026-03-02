@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { Effect } from 'effect';
-import { ensureServer, type ServerManager } from '../server/manager.ts';
+import { ensureServerEffect, type ServerManager } from '../server/manager.ts';
 import { createClient, getConfigEffect } from '../client/index.ts';
 import { runCliEffect } from '../effect/runtime.ts';
 import { setTelemetryContext, trackTelemetryEvent } from '../lib/telemetry.ts';
@@ -58,10 +58,12 @@ const ensureStandaloneTreeSitterWorkerPath = () => {
  * Launch the interactive TUI
  */
 const launchTuiPromise = async (options: TuiOptions): Promise<void> => {
-	const server = await ensureServer({
-		serverUrl: options.server,
-		port: options.port
-	});
+	const server = await runCliEffect(
+		ensureServerEffect({
+			serverUrl: options.server,
+			port: options.port
+		})
+	);
 
 	try {
 		await runCliEffect(

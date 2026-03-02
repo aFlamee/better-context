@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 import { addResourceEffect } from '../client/index.ts';
 import { runCliEffect } from '../effect/runtime.ts';
 import { dim } from '../lib/utils/colors.ts';
-import { ensureServer } from '../server/manager.ts';
+import { withServerEffect } from '../server/manager.ts';
 
 interface GitHubUrlParts {
 	owner: string;
@@ -263,18 +263,16 @@ const runWithServer = <A>(
 	globalOpts: { server?: string; port?: number } | undefined,
 	run: (serverUrl: string) => Effect.Effect<A, unknown, never>
 ) =>
-	(async () => {
-		const server = await ensureServer({
+	runCliEffect(
+		withServerEffect(
+			{
 			serverUrl: globalOpts?.server,
 			port: globalOpts?.port,
 			quiet: true
-		});
-		try {
-			return await runCliEffect(run(server.url));
-		} finally {
-			server.stop();
-		}
-	})();
+			},
+			(server) => run(server.url)
+		)
+	);
 
 /**
  * Interactive wizard for adding a git resource.
