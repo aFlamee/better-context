@@ -21,12 +21,20 @@ const checks: Check[] = [
 		command: ['rg', 'effectFromPromise', 'apps/cli/src/commands']
 	},
 	{
+		name: 'no effectFromPromise in cli source',
+		command: ['rg', 'effectFromPromise', 'apps/cli/src']
+	},
+	{
 		name: 'no promise-style cli client calls in commands',
 		command: [
 			'rg',
 			'\\b(getConfig|getResources|getProviders|askQuestionStream|askQuestion|updateModel|addResource|removeResource|clearResources)\\(',
 			'apps/cli/src/commands'
 		]
+	},
+	{
+		name: 'no direct ensureServer in cli commands',
+		command: ['rg', 'ensureServer\\(', 'apps/cli/src/commands']
 	},
 	{
 		name: 'no async exported command handlers',
