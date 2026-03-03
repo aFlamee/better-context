@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { X } from '@lucide/svelte';
 	import cliShowcase from '$lib/assets/cli-showcase.png';
 	import mcpShowcase from '$lib/assets/mcp-showcase.png';
 	import webShowcase from '$lib/assets/web-showcase.png';
+	import { X } from '@lucide/svelte';
 
 	type ShowcaseCard = {
 		label: string;
