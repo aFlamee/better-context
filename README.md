@@ -1,66 +1,129 @@
-# Better Context (`btca`)
+# btca
 
 <a href="https://www.npmjs.com/package/btca"><img alt="npm" src="https://img.shields.io/npm/v/btca?style=flat-square" /></a>
 
 https://btca.dev
 
-`btca` is a CLI for asking questions about libraries/frameworks by cloning their repos locally and searching the source directly.
-
-Dev docs are in the `apps/cli` directory.
+Ask your AI agent questions about libraries and frameworks by searching the actual source code, not outdated docs.
 
 ## Install
 
 ```bash
-bun add -g btca
-btca --help
+bun add -g btca opencode-ai
+btca connect --provider opencode --model claude-haiku-4-5
 ```
 
-## Quick commands
-
-Ask a question:
+## Usage
 
 ```bash
-btca ask -t svelte -q "How do stores work in Svelte 5?"
+# Ask a question
+btca ask --resource svelte --question "How does the $state rune work?"
+
+# Launch the TUI
+btca
 ```
 
-Open the TUI:
+## Project Setup
+
+Paste this into your AI coding agent to set up btca for your project:
+
+```
+Set up btca for this project: scan package.json for major dependencies (frameworks, libraries, tools), suggest adding each as a btca resource with sensible defaults, then create a btca.config.jsonc file in the project root and update AGENTS.md with usage instructions. Ask me to confirm each resource before adding.
+```
+
+See the full [Getting Started guide](https://docs.btca.dev/guides/quickstart) for more details.
+
+## Development
+
+This is a Bun monorepo using Turborepo. **Only use `bun`** - never npm/yarn.
+
+### Quick Start
 
 ```bash
-btca chat -t svelte
+bun install
+bun run dev:web   # Start web app with Convex
+bun run dev:cli   # Start CLI in watch mode
+bun run server    # Start server in watch mode
+bun run cli       # Run CLI (no watch)
 ```
 
-Run as a server:
+### Web Deployment
 
-```bash
-btca serve -p 8080
-```
+`apps/web` is configured for Vercel. Import the repo into Vercel, set the Root Directory to `apps/web`, and keep the checked-in [`apps/web/vercel.json`](/Users/davis/Developer/better-context/apps/web/vercel.json) so builds run through Convex and inject `PUBLIC_CONVEX_URL` automatically. You still need `CONVEX_DEPLOY_KEY` in Vercel, plus the app's public env vars in Vercel and the backend-only secrets in Convex.
 
-Then POST `/question` with:
+### Scripts
 
-```json
-{ "tech": "svelte", "question": "how does the query remote function work in sveltekit?" }
-```
+All scripts use Turborepo for caching. Run from the repository root.
 
-Keep an OpenCode instance running:
+#### Build
 
-```bash
-btca open
-```
+| Command             | Description                  |
+| ------------------- | ---------------------------- |
+| `bun run build:all` | Build all packages           |
+| `bun run build:cli` | Build CLI (creates binaries) |
+| `bun run build:web` | Build web app                |
 
-## Config
+#### Type Check
 
-On first run, `btca` creates a default config at `~/.config/btca/btca.json`. That’s where the repo list + model/provider live.
+| Command                 | Description               |
+| ----------------------- | ------------------------- |
+| `bun run check:all`     | Type check all packages   |
+| `bun run check:cli`     | Type check CLI            |
+| `bun run check:web`     | Type check web app        |
+| `bun run check:server`  | Type check server         |
+| `bun run check:sandbox` | Type check sandbox        |
+| `bun run check:shared`  | Type check shared package |
 
-## stuff I want to add
+#### Format
 
-- get the git repo for a package using bun:
+| Command                  | Description           |
+| ------------------------ | --------------------- |
+| `bun run format:all`     | Format all packages   |
+| `bun run format:cli`     | Format CLI            |
+| `bun run format:web`     | Format web app        |
+| `bun run format:server`  | Format server         |
+| `bun run format:sandbox` | Format sandbox        |
+| `bun run format:shared`  | Format shared package |
 
-```bash
- bun pm view react repository.url
-```
+#### Test
 
-- tui for working with btca (config, starting chat, server, etc.)
-- mcp server
-- multiple repos for a single btca instance
-- fetch all the branches to pick from when you add a repo in the tui
-- cleaner streamed output in the ask command
+| Command               | Description      |
+| --------------------- | ---------------- |
+| `bun run test:all`    | Run all tests    |
+| `bun run test:server` | Run server tests |
+
+#### Other
+
+| Command                         | Description                                       |
+| ------------------------------- | ------------------------------------------------- |
+| `bun run clean`                 | Remove node_modules, .svelte-kit, .turbo, .vercel |
+| `bun run analytics-proxy:build` | Build analytics proxy Docker image                |
+| `bun run analytics-proxy:run`   | Run analytics proxy locally                       |
+
+### Packages
+
+| Package                 | Path                   | Description                  |
+| ----------------------- | ---------------------- | ---------------------------- |
+| `btca`                  | `apps/cli`             | CLI tool                     |
+| `btca-server`           | `apps/server`          | API server                   |
+| `@btca/web`             | `apps/web`             | Web app (SvelteKit + Convex) |
+| `btca-sandbox`          | `apps/sandbox`         | Sandbox environment          |
+| `@btca/shared`          | `packages/shared`      | Shared utilities             |
+| `@btca/analytics-proxy` | `apps/analytics-proxy` | PostHog analytics proxy      |
+
+## model recs...
+
+**openai**
+
+- "gpt-5.3-codex-spark"
+- "gpt-5.3-codex"
+
+**opencode**
+
+- "claude-sonnet-4-6"
+- "claude-haiku-4-5"
+- "gemini-3-flash"
+
+**minimax**
+
+- "MiniMax-M2.5"

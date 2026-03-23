@@ -1,0 +1,129 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { Effect } from 'effect';
+import { ensureServerEffect, type ServerManager } from '../server/manager.ts';
+import { createClient, getConfigEffect } from '../client/index.ts';
+import { runCliEffect } from '../effect/runtime.ts';
+import { setTelemetryContext, trackTelemetryEvent } from '../lib/telemetry.ts';
+
+declare global {
+	var __BTCA_SERVER__: ServerManager | undefined;
+	var __BTCA_STREAM_OPTIONS__:
+		| {
+				showThinking: boolean;
+				showTools: boolean;
+		  }
+		| undefined;
+}
+
+export interface TuiOptions {
+	server?: string;
+	port?: number;
+	thinking?: boolean;
+	tools?: boolean;
+	subAgent?: boolean;
+}
+
+let hasWarnedMissingTreeSitterWorker = false;
+
+const resolveStandaloneTreeSitterWorkerPath = () => {
+	const executableDir = path.dirname(process.execPath);
+	const candidates = [
+		path.join(executableDir, 'tree-sitter-worker.js'),
+		path.join(executableDir, 'dist', 'tree-sitter-worker.js')
+	];
+	return candidates.find((candidate) => existsSync(candidate));
+};
+
+const ensureStandaloneTreeSitterWorkerPath = () => {
+	if (process.env.OTUI_TREE_SITTER_WORKER_PATH) return;
+
+	const workerPath = resolveStandaloneTreeSitterWorkerPath();
+	if (workerPath) {
+		process.env.OTUI_TREE_SITTER_WORKER_PATH = workerPath;
+		return;
+	}
+
+	if (hasWarnedMissingTreeSitterWorker) return;
+	hasWarnedMissingTreeSitterWorker = true;
+	console.warn(
+		'[btca] Standalone Tree-sitter worker asset not found. Continuing without syntax highlighting worker override.'
+	);
+};
+
+const launchTuiPromise = async (options: TuiOptions): Promise<void> => {
+	const startedAt = Date.now();
+
+	try {
+		const server = await runCliEffect(
+			ensureServerEffect({
+				serverUrl: options.server,
+				port: options.port
+			})
+		);
+
+		try {
+			await runCliEffect(
+				Effect.gen(function* () {
+					const client = createClient(server.url);
+					const config = yield* getConfigEffect(client);
+					yield* Effect.sync(() =>
+						setTelemetryContext({ provider: config.provider, model: config.model })
+					);
+				})
+			);
+		} catch {
+			// Ignore config failures for telemetry
+		}
+
+		await runCliEffect(
+			Effect.gen(function* () {
+				yield* Effect.tryPromise(() =>
+					trackTelemetryEvent({
+						event: 'cli_started',
+						properties: { command: 'btca', mode: 'tui' }
+					})
+				);
+				yield* Effect.tryPromise(() =>
+					trackTelemetryEvent({
+						event: 'cli_tui_started',
+						properties: { command: 'btca', mode: 'tui' }
+					})
+				);
+			})
+		);
+
+		globalThis.__BTCA_SERVER__ = server;
+		globalThis.__BTCA_STREAM_OPTIONS__ = {
+			showThinking: options.subAgent ? false : (options.thinking ?? true),
+			showTools: options.subAgent ? false : (options.tools ?? true)
+		};
+
+		ensureStandaloneTreeSitterWorkerPath();
+		await runCliEffect(Effect.tryPromise(() => import('../tui/App.tsx')));
+		await trackTelemetryEvent({
+			event: 'cli_tui_completed',
+			properties: {
+				command: 'btca',
+				mode: 'tui',
+				durationMs: Date.now() - startedAt,
+				exitCode: 0
+			}
+		});
+	} catch (error) {
+		await trackTelemetryEvent({
+			event: 'cli_tui_failed',
+			properties: {
+				command: 'btca',
+				mode: 'tui',
+				durationMs: Date.now() - startedAt,
+				errorName: error instanceof Error ? error.name : 'UnknownError',
+				exitCode: 1
+			}
+		});
+		throw error;
+	}
+};
+
+export const launchTui = (options: TuiOptions) =>
+	Effect.tryPromise(() => launchTuiPromise(options));

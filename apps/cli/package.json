@@ -1,8 +1,9 @@
 {
 	"name": "btca",
 	"author": "Ben Davis",
-	"version": "0.5.9",
-	"description": "CLI tool for asking questions about technologies using OpenCode",
+	"version": "2.0.5",
+	"homepage": "https://btca.dev",
+	"description": "CLI tool for asking questions about technologies using btca server",
 	"type": "module",
 	"license": "MIT",
 	"repository": {
@@ -26,40 +27,43 @@
 		"dist/btca-darwin-x64",
 		"dist/btca-linux-arm64",
 		"dist/btca-linux-x64",
-		"dist/btca-windows-x64.exe"
+		"dist/btca-windows-x64.exe",
+		"dist/tree-sitter-worker.js",
+		"dist/tree-sitter.js",
+		"dist/tree-sitter.wasm"
 	],
 	"publishConfig": {
 		"access": "public"
 	},
 	"scripts": {
-		"build:js": "bun run scripts/build.ts",
-		"build:targets": "bun run scripts/build-binaries.ts",
-		"build": "bun run build:js && bun run build:targets",
 		"check": "tsgo --noEmit",
-		"prepare": "effect-language-service patch",
-		"dev": "bun run src/tui-solid/App.tsx"
+		"format": "prettier --write .",
+		"dev": "bun run src/index.ts",
+		"build": "bun run scripts/build-binaries.ts",
+		"prepublishOnly": "bun run scripts/verify-dist.ts"
 	},
 	"devDependencies": {
+		"@babel/core": "^7.29.0",
+		"@babel/preset-react": "^7.28.5",
+		"@babel/preset-typescript": "^7.28.5",
 		"@btca/shared": "workspace:*",
-		"@effect/cli": "^0.72.1",
-		"@effect/language-service": "^0.62.4",
-		"@effect/platform": "^0.93.8",
-		"@effect/platform-bun": "^0.85.0",
-		"@effect/printer": "^0.47.0",
-		"@effect/printer-ansi": "^0.47.0",
-		"@effect/typeclass": "^0.38.0",
-		"@opencode-ai/sdk": "^1.0.182",
-		"@opentui/core": "^0.1.62",
+		"@inquirer/select": "^5.0.4",
+		"@opentui/core": "0.1.77",
+		"@opentui/react": "0.1.77",
+		"@tmcp/adapter-zod": "^0.1.7",
+		"@tmcp/transport-stdio": "^0.4.1",
 		"@types/bun": "latest",
-		"effect": "^3.19.13",
-		"typescript": "^5.9.3",
-		"@opentui/solid": "^0.1.62",
-		"solid-js": "^1.9.10"
-	},
-	"dependencies": {
-		"@shikijs/langs": "^3.20.0",
-		"@shikijs/themes": "^3.20.0",
-		"marked": "^17.0.1",
-		"shiki": "^3.20.0"
+		"@types/node": "22",
+		"@types/react": "^19.2.13",
+		"@typescript/native-preview": "^7.0.0-dev.20260109.1",
+		"babel-plugin-react-compiler": "^1.0.0",
+		"btca-server": "workspace:*",
+		"prettier": "^3.7.4",
+		"react": "^19.2.4",
+		"tmcp": "^1.19.2",
+		"web-tree-sitter": "0.25.10",
+		"zod": "^4.3.6",
+		"@effect/platform-bun": "4.0.0-beta.20",
+		"effect": "4.0.0-beta.20"
 	}
 }

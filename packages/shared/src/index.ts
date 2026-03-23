@@ -1,3 +1,12 @@
+// Re-export all thread-related types and functions
+export * from './thread.ts';
+
+// Re-export stream filtering utilities
+export * from './stream-filter.ts';
+export * from './resources.ts';
+export * from './resourceValidation.ts';
+export * from './jsonc.ts';
+
 type BlessedModel = {
 	provider: string;
 	model: string;
@@ -8,39 +17,115 @@ type BlessedModel = {
 
 export const BLESSED_MODELS: BlessedModel[] = [
 	{
-		provider: 'anthropic',
-		model: 'claude-haiku-4-5',
-		description: 'Claude Haiku 4.5, no reasoning. I HIGHLY recommend this model.',
-		providerSetupUrl: 'https://opencode.ai/docs/providers/#anthropic',
-		isDefault: false
-	},
-	{
-		provider: 'openrouter',
-		model: 'btca-glm-4-6',
-		description: 'GLM 4.6 on Cerebras through OpenRouter. Very fast, very good.',
-		providerSetupUrl: 'https://opencode.ai/docs/providers/#openrouter',
-		isDefault: false
-	},
-	{
 		provider: 'opencode',
-		model: 'big-pickle',
-		description: 'Big Pickle, surprisingly good (and free)',
-		providerSetupUrl: 'https://opencode.ai/docs/providers/#opencode-zen',
+		model: 'claude-haiku-4-5',
+		description: 'Claude Haiku 4.5 via OpenCode Zen (API key).',
+		providerSetupUrl: 'https://opencode.ai/zen',
 		isDefault: true
 	},
 	{
 		provider: 'opencode',
-		model: 'kimi-k2',
-		description: 'Kimi K2, no reasoning',
-		providerSetupUrl: 'https://opencode.ai/docs/providers/#opencode-zen',
+		model: 'claude-sonnet-4-6',
+		description: 'Claude Sonnet 4.6 via OpenCode Zen (API key).',
+		providerSetupUrl: 'https://opencode.ai/zen',
 		isDefault: false
 	},
 	{
 		provider: 'opencode',
-		model: 'btca-gemini-3-flash',
-		description:
-			'Gemini 3 Flash with low reasoning (the special btca version is already configured for you in btca)',
-		providerSetupUrl: 'https://opencode.ai/docs/providers/#opencode-zen',
+		model: 'gemini-3-flash',
+		description: 'Gemini 3 Flash via OpenCode Zen (API key).',
+		providerSetupUrl: 'https://opencode.ai/zen',
+		isDefault: false
+	},
+	{
+		provider: 'opencode',
+		model: 'glm-4.7',
+		description: 'GLM 4.7 via OpenCode Zen (API key).',
+		providerSetupUrl: 'https://opencode.ai/zen',
+		isDefault: false
+	},
+	{
+		provider: 'opencode',
+		model: 'kimi-k2.5',
+		description: 'Kimi K2.5 via OpenCode Zen (API key).',
+		providerSetupUrl: 'https://opencode.ai/zen',
+		isDefault: false
+	},
+	{
+		provider: 'opencode',
+		model: 'gpt-5.4',
+		description: 'GPT-5.4 via OpenCode Zen (API key).',
+		providerSetupUrl: 'https://opencode.ai/zen',
+		isDefault: false
+	},
+	{
+		provider: 'opencode',
+		model: 'gpt-5.3-codex-spark',
+		description: 'GPT-5.3 Codex Spark via OpenCode Zen (API key).',
+		providerSetupUrl: 'https://opencode.ai/zen',
+		isDefault: false
+	},
+	{
+		provider: 'openrouter',
+		model: 'anthropic/claude-haiku-4.5',
+		description: 'Claude Haiku 4.5 via OpenRouter (API key).',
+		providerSetupUrl: 'https://openrouter.ai/settings/keys',
+		isDefault: false
+	},
+	{
+		provider: 'openrouter',
+		model: 'openai/gpt-5.2-codex',
+		description: 'GPT-5.2 Codex via OpenRouter (API key).',
+		providerSetupUrl: 'https://openrouter.ai/settings/keys',
+		isDefault: false
+	},
+	{
+		provider: 'openrouter',
+		model: 'minimax/minimax-m2.1',
+		description: 'MiniMax M2.1 via OpenRouter (API key).',
+		providerSetupUrl: 'https://openrouter.ai/settings/keys',
+		isDefault: false
+	},
+	{
+		provider: 'openrouter',
+		model: 'moonshotai/kimi-k2.5',
+		description: 'Moonshot Kimi K2.5 via OpenRouter (API key).',
+		providerSetupUrl: 'https://openrouter.ai/settings/keys',
+		isDefault: false
+	},
+	{
+		provider: 'openai',
+		model: 'gpt-5.3-codex-spark',
+		description: 'GPT-5.3 Codex Spark (OAuth; uses your ChatGPT subscription).',
+		providerSetupUrl: 'https://chatgpt.com',
+		isDefault: true
+	},
+	{
+		provider: 'openai',
+		model: 'gpt-5.4',
+		description: 'GPT-5.4 (OAuth; uses your ChatGPT subscription).',
+		providerSetupUrl: 'https://chatgpt.com',
+		isDefault: false
+	},
+	{
+		provider: 'anthropic',
+		model: 'claude-haiku-4-5-20251001',
+		description: 'Claude Haiku 4.5 (Anthropic API key).',
+		providerSetupUrl: 'https://platform.claude.com/dashboard',
+		isDefault: false
+	},
+	{
+		provider: 'anthropic',
+		model: 'claude-sonnet-4-5-20250929',
+		description: 'Claude Sonnet 4.5 (Anthropic API key).',
+		providerSetupUrl: 'https://platform.claude.com/dashboard',
+		isDefault: false
+	},
+	{
+		provider: 'google',
+		model: 'gemini-3-flash-preview',
+		description: 'Gemini 3 Flash Preview (Google API key).',
+		providerSetupUrl: 'https://aistudio.google.com/api-keys',
 		isDefault: false
 	}
 ];

@@ -1,0 +1,60 @@
+// Example btca project configuration
+// Place this file as btca.config.jsonc in your project root
+{
+  "$schema": "https://btca.dev/btca.schema.json",
+  
+  // Resources available for querying
+  "resources": [
+    {
+      "name": "svelte",
+      "type": "git",
+      "url": "https://github.com/sveltejs/svelte.dev",
+      "branch": "main",
+      "searchPath": "apps/svelte.dev",
+      "specialNotes": "Svelte docs website. Focus on content directory for markdown documentation."
+    },
+    {
+      "name": "effect",
+      "type": "git", 
+      "url": "https://github.com/Effect-TS/effect",
+      "branch": "main",
+      "specialNotes": "Main Effect repository with source code and examples."
+    },
+    {
+      "name": "tailwindcss",
+      "type": "git",
+      "url": "https://github.com/tailwindlabs/tailwindcss.com",
+      "branch": "main",
+      "searchPath": "src/docs",
+      "specialNotes": "Tailwind CSS docs website. Focus on docs directory."
+    },
+    {
+      "name": "myproject",
+      "type": "local",
+      "path": "/absolute/path/to/project",
+      "specialNotes": "This project's source code for self-reference."
+    },
+    {
+      "name": "reactNpm",
+      "type": "npm",
+      "package": "react",
+      "version": "latest",
+      "specialNotes": "Use package metadata and README for API-level answers."
+    }
+  ],
+  
+  // AI model configuration
+  "model": "claude-haiku-4-5",
+  "provider": "opencode",
+  "providerOptions": {
+    // OpenAI-compatible providers (e.g., LM Studio)
+    "openai-compat": {
+      // Base URL of your OpenAI-compatible server
+      "baseURL": "http://localhost:1234/v1",
+      // Provider name used by the AI SDK
+      "name": "lmstudio"
+    }
+  },
+  "providerTimeoutMs": 300000,
+  "maxSteps": 40
+}

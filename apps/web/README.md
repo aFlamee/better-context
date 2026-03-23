@@ -1,38 +1,44 @@
-# sv
+# @btca/web
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit + Convex web app for btca.
 
-## Creating a project
+## Local development
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+From the repo root:
 
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+bun install
+bun run dev:web
 ```
 
-## Building
-
-To create a production version of your app:
+From `apps/web` directly:
 
 ```sh
-npm run build
+bun run dev
 ```
 
-You can preview the production build with `npm run preview`.
+## Vercel deployment
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+1. Import the monorepo into Vercel.
+2. Set the project Root Directory to `apps/web`.
+3. Keep the checked-in `vercel.json` so Vercel runs `bun run deploy:vercel`.
+4. Add `CONVEX_DEPLOY_KEY` in Vercel for Production. If you use preview deployments, add a Preview-scoped `CONVEX_DEPLOY_KEY` too.
+5. Add the web app's public env vars in Vercel:
+
+```sh
+PUBLIC_CLERK_PUBLISHABLE_KEY=
+PUBLIC_POSTHOG_ID=
+PUBLIC_ANALYTICS_HOST=
+```
+
+`PUBLIC_CONVEX_URL` is injected during the Vercel build by `convex deploy --cmd-url-env-var-name PUBLIC_CONVEX_URL --cmd 'bun run build'`, so each deployment is built against the matching Convex deployment.
+
+## Env split
+
+- Vercel hosts the SvelteKit app and its public env vars.
+- Convex still owns Convex function env vars like `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, `DAYTONA_WEBHOOK_SECRET`, `POSTHOG_ID`, and other backend-only secrets.
+
+## Notes
+
+- The app now uses `@sveltejs/adapter-vercel`.
+- Clerk production auth should use a custom domain, not a `*.vercel.app` URL.

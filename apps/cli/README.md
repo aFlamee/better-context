@@ -1,143 +1,203 @@
-# btca
+# @btca/cli
 
-A CLI tool for asking questions about technologies using their source code repositories.
+CLI tool for asking questions about technologies using the btca server.
 
 ## Installation
 
+### From npm (Recommended)
+
 ```bash
+bun add -g @btca/cli
+```
+
+### From source
+
+```bash
+git clone https://github.com/davis7dotsh/better-context.git
+cd better-context
 bun install
+bun run --filter=@btca/cli build
 ```
 
 ## Usage
 
+### Interactive TUI (Default)
+
+Launch the interactive terminal UI:
+
 ```bash
-bun run src/index.ts
+btca
 ```
 
-Or after building:
+Use `@mentions` to reference resources:
+
+- Type `@svelte How do I create a store?` to ask about Svelte
+- Use multiple mentions: `@react @typescript How do I type props?`
+
+### One-shot Question
+
+Ask a single question and exit:
 
 ```bash
-btca <command>
-```
-
-## Commands
-
-### `btca`
-
-Show version information.
-
-### `btca ask`
-
-Ask a question about a technology.
-
-```bash
-btca ask -t <tech> -q <question>
-btca ask --tech svelte --question "How do I create a reactive store?"
+btca ask --resource svelte --question "How do I create a reactive store?"
 ```
 
 Options:
 
-- `-t, --tech` - The technology/repo to query
-- `-q, --question` - The question to ask
+- `-r, --resource <name...>` - Resource names or HTTPS Git URLs (can specify multiple)
+- `-q, --question <text>` - Question to ask (required)
+- `--no-thinking` - Hide reasoning output
+- `--no-tools` - Hide tool-call traces
+- `--sub-agent` - Emit clean output (no reasoning or tool traces)
 
-### `btca chat`
-
-Start an interactive TUI chat session.
+Examples:
 
 ```bash
-btca chat -t <tech>
-btca chat --tech nextjs
+# Single resource
+btca ask --resource svelte --question "How do signals work?"
+
+# One-shot GitHub repository (anonymous)
+btca ask --resource https://github.com/sveltejs/svelte.dev -q "How do I setup a new sveltekit project?"
+
+# Multiple resources
+btca ask --resource react --resource typescript --question "How do I type useState?"
+
+# Using @mentions in question
+btca ask --question "@svelte @tailwind How do I style components?"
 ```
 
-Options:
+Notes:
 
-- `-t, --tech` - The technology/repo to chat about
+- `-r` accepts configured resource names and HTTPS Git URLs.
+- URL resources are not added to config and are cached on disk for reuse on later asks.
 
-### `btca serve`
+### Start Server
 
-Start an HTTP server to answer questions via API.
+Start the btca server and keep it running to handle HTTP requests:
 
 ```bash
+# Start on default port (8080)
 btca serve
-btca serve -p 3000
+
+# Start on custom port
+btca serve --port 3000
 ```
 
-Options:
-
-- `-p, --port` - Port to listen on (default: 8080)
-
-Endpoint:
-
-- `POST /question` - Send `{ "tech": "svelte", "question": "..." }` to get answers
-
-### `btca open`
-
-Hold an OpenCode instance in the background for faster subsequent queries.
-
-```bash
-btca open
-```
-
-### `btca config`
-
-Manage CLI configuration. Shows the config file path when run without subcommands.
-
-```bash
-btca config
-```
-
-#### `btca config model`
-
-View or set the model and provider.
-
-```bash
-# View current model/provider
-btca config model
-
-# Set model and provider
-btca config model -p <provider> -m <model>
-btca config model --provider anthropic --model claude-3-opus
-```
-
-Options:
-
-- `-p, --provider` - The provider to use
-- `-m, --model` - The model to use
-
-Both options must be specified together when updating.
-
-#### `btca config repos list`
-
-List all configured repositories.
-
-```bash
-btca config repos list
-```
-
-#### `btca config repos add`
-
-Add a new repository to the configuration.
-
-```bash
-btca config repos add -n <name> -u <url> [-b <branch>] [--notes <notes>]
-btca config repos add --name react --url https://github.com/facebook/react --branch main
-```
-
-Options:
-
-- `-n, --name` - Unique name for the repo (required)
-- `-u, --url` - Git repository URL (required)
-- `-b, --branch` - Branch to use (default: "main")
-- `--notes` - Special instructions for the AI when using this repo
+The server will run until you press `Ctrl+C` to stop it.
 
 ## Configuration
 
-Configuration is stored at `~/.config/btca/btca.json`. The config file includes:
+btca uses a config file at `~/.config/btca/btca.config.jsonc`. Manage configuration via CLI commands.
 
-- `promptsDirectory` - Directory for system prompts
-- `reposDirectory` - Directory where repos are cloned
-- `port` - Default server port
-- `maxInstances` - Maximum concurrent OpenCode instances
-- `repos` - Array of configured repositories
-- `model` - AI model to use
-- `provider` - AI provider to use
+### Set Model
+
+```bash
+btca connect --provider opencode --model claude-haiku-4-5
+```
+
+#### OpenAI-compatible providers
+
+To use an OpenAI-compatible server (e.g., LM Studio), run:
+
+```bash
+btca connect --provider openai-compat
+```
+
+You will be prompted for:
+
+- Base URL: the root URL of your OpenAI-compatible server.
+- Provider name: the AI SDK provider identifier.
+- Model ID: the model to use for requests (stored as `model` in `btca.config.jsonc`).
+- API key (optional): only if your server requires authentication.
+
+### List Resources
+
+```bash
+btca resources
+```
+
+### Add Resource
+
+```bash
+# Add a git repository
+btca add https://github.com/Effect-TS/effect --name effect --type git --branch main
+
+# Add with search path (focus on specific subdirectory)
+btca add https://github.com/sveltejs/svelte.dev --name svelte --type git --branch main --search-path apps/svelte.dev
+
+# Add a local directory
+btca add /path/to/project --name myproject --type local
+
+# Add an npm package
+btca add npm:react --name reactNpm --type npm
+```
+
+### Add Reference Repo
+
+Clone a repository into `./references/<repo-name>` and keep it untracked locally via `.git/info/exclude`:
+
+```bash
+btca reference https://github.com/sveltejs/svelte.git
+```
+
+### Remove Resource
+
+```bash
+btca remove effect
+```
+
+### Clear Cached Resources
+
+Clear all locally cloned git repositories:
+
+```bash
+btca clear
+```
+
+### Server Options
+
+```bash
+# Use an existing btca server
+btca --server http://localhost:3000
+
+# Specify port for auto-started server
+btca --port 3001
+```
+
+## OpenCode MCP Plugin
+
+Download the official OpenCode MCP config template and add your API key:
+
+```bash
+curl -fsSL https://btca.dev/opencode-mcp.json -o opencode.json
+```
+
+Then replace `YOUR_API_KEY` with your MCP API key from the web dashboard.
+
+## TUI Commands
+
+In the interactive TUI, use `/` to access commands:
+
+- `/connect` - Configure provider and model
+- `/add` - Add a new resource
+- `/clear` - Clear chat history
+- `/resume` - Resume a previous thread
+- `/new` - Alias for `/clear`
+
+## Keyboard Shortcuts
+
+- `Enter` - Send message
+- `Escape` - Cancel streaming response (press twice to confirm)
+- `Ctrl+C` - Clear input or quit
+- `Ctrl+Q` - Quit
+- `Tab` - Autocomplete commands/mentions
+- `Up/Down` - Navigate palettes
+
+## Requirements
+
+- [Bun](https://bun.sh) >= 1.1.0
+- A running btca server (auto-started by default)
+
+## License
+
+MIT

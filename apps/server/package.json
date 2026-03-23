@@ -1,0 +1,67 @@
+{
+	"name": "btca-server",
+	"version": "2.0.5",
+	"description": "BTCA server for answering questions about your codebase using OpenCode AI",
+	"author": "Ben Davis",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/davis7dotsh/better-context.git",
+		"directory": "apps/server"
+	},
+	"keywords": [
+		"btca",
+		"opencode",
+		"ai",
+		"codebase",
+		"documentation",
+		"server",
+		"api",
+		"bun"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"engines": {
+		"bun": ">=1.1.0"
+	},
+	"module": "src/index.ts",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./stream": "./src/stream/index.ts",
+		"./stream/types": "./src/stream/types.ts",
+		"./config/remote": "./src/config/remote.ts",
+		"./resources/schema": "./src/resources/schema.ts"
+	},
+	"files": [
+		"src",
+		"README.md"
+	],
+	"scripts": {
+		"check": "tsgo --noEmit",
+		"dev": "bun --watch src/index.ts",
+		"format": "prettier --write .",
+		"test": "bun test",
+		"test:watch": "bun test --watch"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"@typescript/native-preview": "^7.0.0-dev.20260109.1",
+		"prettier": "^3.7.4"
+	},
+	"dependencies": {
+		"@ai-sdk/anthropic": "^3.0.23",
+		"@ai-sdk/google": "^3.0.13",
+		"@ai-sdk/openai": "^3.0.18",
+		"@ai-sdk/openai-compatible": "^2.0.18",
+		"@btca/shared": "workspace:*",
+		"@effect/platform-bun": "4.0.0-beta.20",
+		"ai": "^6.0.49",
+		"effect": "4.0.0-beta.20",
+		"just-bash": "^2.7.0",
+		"opencode-ai": "^1.1.36",
+		"vercel-minimax-ai-provider": "^0.0.2",
+		"zod": "^3.25.76"
+	}
+}

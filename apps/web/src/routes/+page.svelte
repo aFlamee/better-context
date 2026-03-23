@@ -1,241 +1,220 @@
 <script lang="ts">
-	import CopyButton from '$lib/CopyButton.svelte';
-	import { getShikiStore } from '$lib/stores/ShikiStore.svelte';
-	import { getThemeStore } from '$lib/stores/ThemeStore.svelte';
+	import cliShowcase from '$lib/assets/cli-showcase.png';
+	import mcpShowcase from '$lib/assets/mcp-showcase.png';
+	import webShowcase from '$lib/assets/web-showcase.png';
+	import { X } from '@lucide/svelte';
 
-	const INSTALL_CMD = `bun add -g btca opencode-ai && btca`;
+	type ShowcaseCard = {
+		label: string;
+		eyebrow: string;
+		title: string;
+		description: string;
+		image: string;
+		alt: string;
+	};
 
-	const ASK_CMD = `btca ask -t svelte -q "How do stores work in Svelte 5?"`;
-	const CHAT_CMD = `btca chat -t svelte`;
-	const SERVE_CMD = `btca serve -p 8080`;
-	const OPEN_CMD = `btca open`;
+	const showcaseCards: ShowcaseCard[] = [
+		{
+			label: 'CLI',
+			eyebrow: 'local',
+			title: 'Ask questions about local repos in your terminal.',
+			description:
+				'Keep code on your machine. Add repos or directories. Get grounded answers fast.',
+			image: cliShowcase,
+			alt: 'btca CLI showcase'
+		},
+		{
+			label: 'Web app',
+			eyebrow: 'cloud',
+			title: 'Save threads, organize projects, and search code in the cloud.',
+			description: 'Good for ongoing research, team context, and work you want to revisit.',
+			image: webShowcase,
+			alt: 'btca web app showcase'
+		},
+		{
+			label: 'MCP',
+			eyebrow: 'agents',
+			title: 'Give Cursor, Claude Code, Codex, and other tools access to the right repo context.',
+			description: 'Use btca as the codebase lookup layer for your agents.',
+			image: mcpShowcase,
+			alt: 'btca MCP showcase'
+		}
+	];
 
-	const shikiStore = getShikiStore();
-	const themeStore = getThemeStore();
-	const shikiTheme = $derived(themeStore.theme === 'dark' ? 'dark-plus' : 'light-plus');
+	let activePreview = $state<ShowcaseCard | null>(null);
+
+	const openPreview = (card: ShowcaseCard) => {
+		activePreview = card;
+	};
+
+	const closePreview = () => {
+		activePreview = null;
+	};
+
+	const handleKeydown = (event: KeyboardEvent) => {
+		if (event.key === 'Escape') {
+			closePreview();
+		}
+	};
 </script>
 
-<section class="flex flex-col gap-10">
-	<div class="flex flex-col gap-4">
-		<div class="inline-flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
-			<span
-				class="inline-flex items-center rounded-full border border-orange-500/20 bg-orange-500/10 px-2 py-1 text-xs font-medium text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300"
-				>AI Powered Docs Search</span
-			>
-			<span class="hidden sm:inline"
-				>Ask a Question, Search the Actual Codebase, Get a Real Answer.</span
-			>
-		</div>
+<svelte:head>
+	<title>btca</title>
+	<meta
+		name="description"
+		content="Ask questions about any codebase and get answers grounded in the repo with btca."
+	/>
+</svelte:head>
 
-		<h1
-			class="text-balance text-4xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50 sm:text-5xl"
-		>
-			Up to Date Info About any Technology
+<svelte:window onkeydown={handleKeydown} />
+
+<section class="flex flex-col gap-14">
+	<section class="flex flex-col gap-5">
+		<h1 class="bc-h1 text-balance text-5xl sm:text-6xl lg:text-7xl bc-reveal" style="--delay: 90ms">
+			Ask the repo,
+			<span class="text-[hsl(var(--bc-accent))]">not the internet.</span>
 		</h1>
 
-		<p
-			class="max-w-2xl text-pretty text-base leading-relaxed text-neutral-700 dark:text-neutral-300 sm:text-lg"
-		>
-			<code class="rounded bg-neutral-900/5 px-1.5 py-1 text-sm dark:bg-white/10">btca</code>
-			is a CLI for asking questions about libraries/frameworks by cloning their repos locally and searching
-			the source directly
+		<p class="bc-prose max-w-3xl text-pretty text-base sm:text-lg bc-reveal" style="--delay: 160ms">
+			Search source files, docs, and config with the CLI, web app, or MCP. Get answers tied to the
+			codebase instead of generic model guesses.
 		</p>
 
-		<div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+		<p
+			class="max-w-2xl text-sm font-medium text-[hsl(var(--bc-accent))] bc-reveal"
+			style="--delay: 195ms"
+		>
+			Your AI can already write code. btca helps it read the codebase first.
+		</p>
+
+		<div class="flex flex-col gap-3 sm:flex-row sm:items-center bc-reveal" style="--delay: 230ms">
+			<a href="/app" class="bc-chip bc-btnPrimary justify-center">Try the web app</a>
 			<a
-				href="/getting-started"
-				class="inline-flex items-center justify-center rounded-2xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white no-underline shadow-sm shadow-orange-600/20 hover:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-500"
-			>
-				Get started
-			</a>
-			<a
-				href="https://github.com/bmdavis419/better-context"
+				href="https://docs.btca.dev/guides/quickstart"
+				class="bc-chip justify-center"
 				target="_blank"
 				rel="noreferrer"
-				class="inline-flex items-center justify-center rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-900 no-underline shadow-sm hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-50 dark:hover:bg-neutral-900"
 			>
-				View on GitHub
+				Install the CLI
 			</a>
-		</div>
-	</div>
-
-	<section id="install" class="scroll-mt-28">
-		<h2 class="text-xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
-			Install
-		</h2>
-		<p class="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
-			Install globally with Bun, then run <code
-				class="rounded bg-neutral-900/5 px-1.5 py-1 text-xs dark:bg-white/10">btca --help</code
-			>.
-		</p>
-		<div
-			class="relative mt-4 min-w-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white/70 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/30 p-4 h-20 flex flex-row items-center justify-between"
-		>
-			<div class="min-w-0 flex-1 overflow-x-auto">
-				{#if shikiStore.highlighter}
-					{@html shikiStore.highlighter.codeToHtml(INSTALL_CMD, {
-						theme: shikiTheme,
-						lang: 'bash',
-						rootStyle: 'background-color: transparent; padding: 0; margin: 0; height: 100%;'
-					})}
-				{:else}
-					<pre
-						class="m-0 h-full whitespace-pre p-0 leading-relaxed text-neutral-900 dark:text-neutral-50"><code
-							>{INSTALL_CMD}</code
-						></pre>
-				{/if}
-			</div>
-			<CopyButton text={INSTALL_CMD} label="Copy install command" />
+			<a href="/pricing" class="bc-chip justify-center">View pricing</a>
 		</div>
 	</section>
 
-	<section id="commands" class="scroll-mt-28">
-		<h2 class="text-xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
-			Quick commands
-		</h2>
-		<p class="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
-			The CLI currently ships these subcommands:
-			<code class="rounded bg-neutral-900/5 px-1 py-0.5 text-xs dark:bg-white/10">ask</code>,
-			<code class="rounded bg-neutral-900/5 px-1 py-0.5 text-xs dark:bg-white/10">chat</code>,
-			<code class="rounded bg-neutral-900/5 px-1 py-0.5 text-xs dark:bg-white/10">serve</code>,
-			<code class="rounded bg-neutral-900/5 px-1 py-0.5 text-xs dark:bg-white/10">open</code>.
-		</p>
+	<section class="grid items-stretch gap-5 lg:grid-cols-3">
+		{#each showcaseCards as card}
+			<button
+				type="button"
+				class="bc-card bc-ring bc-cardHover flex h-full cursor-pointer flex-col overflow-hidden text-left transition-transform hover:-translate-y-0.5"
+				onclick={() => openPreview(card)}
+				aria-label={`Open ${card.label} preview`}
+			>
+				<div class="flex items-center justify-between gap-4 px-5 py-4">
+					<div class="bc-badge bc-badgeAccent">
+						<span class="bc-kickerDot"></span>
+						<span>{card.label}</span>
+					</div>
+					<div class="text-xs font-semibold tracking-[0.16em] uppercase bc-muted">
+						{card.eyebrow}
+					</div>
+				</div>
 
-		<div class="mt-4 grid gap-4 md:grid-cols-2">
-			<div
-				class="min-w-0 rounded-2xl border border-neutral-200 bg-white/70 p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/30"
-			>
-				<div class="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-					Ask a question
-				</div>
-				<div
-					class="relative mt-3 min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white/70 p-4 dark:border-neutral-800 dark:bg-neutral-950/40"
-				>
-					<div class="flex items-center justify-between gap-3">
-						<div class="min-w-0 flex-1 overflow-x-auto">
-							{#if shikiStore.highlighter}
-								{@html shikiStore.highlighter.codeToHtml(ASK_CMD, {
-									theme: shikiTheme,
-									lang: 'bash',
-									rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
-								})}
-							{:else}
-								<pre
-									class="m-0 whitespace-pre text-sm leading-relaxed text-neutral-900 dark:text-neutral-50"><code
-										>{ASK_CMD}</code
-									></pre>
-							{/if}
-						</div>
-						<CopyButton text={ASK_CMD} label="Copy ask command" />
+				<div class="flex flex-1 flex-col px-5 pb-5">
+					<h2 class="text-lg font-semibold">{card.title}</h2>
+					<p class="bc-prose mt-2 text-sm">{card.description}</p>
+					<div class="mt-auto pt-4">
+						<img
+							src={card.image}
+							alt={card.alt}
+							class="w-full rounded-lg border border-[hsl(var(--bc-border))]"
+							loading="lazy"
+						/>
 					</div>
 				</div>
-			</div>
-			<div
-				class="min-w-0 rounded-2xl border border-neutral-200 bg-white/70 p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/30"
-			>
-				<div class="text-sm font-semibold text-neutral-900 dark:text-neutral-50">Open the TUI</div>
-				<div
-					class="relative mt-3 min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white/70 p-4 dark:border-neutral-800 dark:bg-neutral-950/40"
-				>
-					<div class="flex items-center justify-between gap-3">
-						<div class="min-w-0 flex-1 overflow-x-auto">
-							{#if shikiStore.highlighter}
-								{@html shikiStore.highlighter.codeToHtml(CHAT_CMD, {
-									theme: shikiTheme,
-									lang: 'bash',
-									rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
-								})}
-							{:else}
-								<pre
-									class="m-0 whitespace-pre text-sm leading-relaxed text-neutral-900 dark:text-neutral-50"><code
-										>{CHAT_CMD}</code
-									></pre>
-							{/if}
-						</div>
-						<CopyButton text={CHAT_CMD} label="Copy chat command" />
-					</div>
-				</div>
-			</div>
-			<div
-				class="min-w-0 rounded-2xl border border-neutral-200 bg-white/70 p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/30"
-			>
-				<div class="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-					Run as a server
-				</div>
-				<div
-					class="relative mt-3 min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white/70 p-4 dark:border-neutral-800 dark:bg-neutral-950/40"
-				>
-					<div class="flex items-center justify-between gap-3">
-						<div class="min-w-0 flex-1 overflow-x-auto">
-							{#if shikiStore.highlighter}
-								{@html shikiStore.highlighter.codeToHtml(SERVE_CMD, {
-									theme: shikiTheme,
-									lang: 'bash',
-									rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
-								})}
-							{:else}
-								<pre
-									class="m-0 whitespace-pre text-sm leading-relaxed text-neutral-900 dark:text-neutral-50"><code
-										>{SERVE_CMD}</code
-									></pre>
-							{/if}
-						</div>
-						<CopyButton text={SERVE_CMD} label="Copy serve command" />
-					</div>
-				</div>
-				<div class="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
-					POST <code class="rounded bg-neutral-900/5 px-1 py-0.5 text-xs dark:bg-white/10"
-						>/question</code
-					>
-					with
-					<code class="rounded bg-neutral-900/5 px-1 py-0.5 text-xs dark:bg-white/10"
-						>&#123;"tech","question"&#125;</code
-					>.
-				</div>
-			</div>
-			<div
-				class="min-w-0 rounded-2xl border border-neutral-200 bg-white/70 p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/30"
-			>
-				<div class="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-					Keep an OpenCode instance running
-				</div>
-				<div
-					class="relative mt-3 min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white/70 p-4 dark:border-neutral-800 dark:bg-neutral-950/40"
-				>
-					<div class="flex items-center justify-between gap-3">
-						<div class="min-w-0 flex-1 overflow-x-auto">
-							{#if shikiStore.highlighter}
-								{@html shikiStore.highlighter.codeToHtml(OPEN_CMD, {
-									theme: shikiTheme,
-									lang: 'bash',
-									rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
-								})}
-							{:else}
-								<pre
-									class="m-0 whitespace-pre text-sm leading-relaxed text-neutral-900 dark:text-neutral-50"><code
-										>{OPEN_CMD}</code
-									></pre>
-							{/if}
-						</div>
-						<CopyButton text={OPEN_CMD} label="Copy open command" />
-					</div>
-				</div>
-			</div>
+			</button>
+		{/each}
+	</section>
+
+	<section class="bc-card bc-ring p-6">
+		<div class="max-w-3xl">
+			<div class="text-sm font-semibold">Why use btca?</div>
+			<p class="mt-2 text-sm bc-prose">
+				Generic AI answers are often based on priors, stale docs, or incomplete context. btca
+				narrows the model to the repos and resources you choose, so answers are grounded in the
+				codebase you actually care about.
+			</p>
 		</div>
 	</section>
 
-	<section id="config" class="scroll-mt-28">
-		<h2 class="text-xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
-			Config
-		</h2>
-		<p class="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
-			On first run, <code class="rounded bg-neutral-900/5 px-1.5 py-1 text-xs dark:bg-white/10"
-				>btca</code
-			>
-			creates a default config at
-			<code class="rounded bg-neutral-900/5 px-1.5 py-1 text-xs dark:bg-white/10"
-				>~/.config/btca/btca.json</code
-			>. That’s where repo list + model/provider live.
-		</p>
+	<section class="bc-card bc-ring p-6">
+		<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+			<div>
+				<div class="text-sm font-semibold">Pick the workflow you want:</div>
+				<p class="mt-1 text-sm bc-prose">
+					CLI for local repo search, web app for saved threads and cloud projects, docs for setup,
+					pricing for plan details, and resources for starter repos.
+				</p>
+			</div>
+			<div class="flex flex-wrap gap-3">
+				<a href="/cli" class="bc-chip">CLI</a>
+				<a href="/web" class="bc-chip">Web app</a>
+				<a href="https://docs.btca.dev" class="bc-chip" target="_blank" rel="noreferrer">Docs</a>
+				<a href="/pricing" class="bc-chip">Pricing</a>
+				<a href="/resources" class="bc-chip">Resources</a>
+				<a
+					href="https://docs.btca.dev/guides/configuration"
+					class="bc-chip"
+					target="_blank"
+					rel="noreferrer"
+				>
+					Configuration
+				</a>
+			</div>
+		</div>
 	</section>
 </section>
+
+{#if activePreview}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-[hsl(0_0%_0%/0.86)] p-4 backdrop-blur-sm sm:p-8"
+		role="dialog"
+		aria-modal="true"
+		aria-label={`${activePreview.label} preview`}
+		tabindex="-1"
+	>
+		<button type="button" class="absolute inset-0" onclick={closePreview} aria-label="Close preview"
+		></button>
+
+		<button
+			type="button"
+			class="bc-chip absolute top-4 right-4 z-20 sm:top-6 sm:right-6"
+			onclick={closePreview}
+			aria-label="Close preview"
+		>
+			<X size={18} />
+		</button>
+
+		<div class="relative z-10 flex max-h-full w-full max-w-7xl flex-col gap-4">
+			<div class="flex items-center justify-between gap-4">
+				<div>
+					<div class="bc-badge bc-badgeAccent">
+						<span class="bc-kickerDot"></span>
+						<span>{activePreview.label}</span>
+					</div>
+					<p class="bc-prose mt-3 max-w-3xl text-sm">{activePreview.title}</p>
+				</div>
+				<div class="hidden text-xs font-semibold tracking-[0.16em] uppercase bc-muted sm:block">
+					{activePreview.eyebrow}
+				</div>
+			</div>
+
+			<div class="min-h-0 overflow-auto">
+				<img
+					src={activePreview.image}
+					alt={activePreview.alt}
+					class="mx-auto max-h-[78vh] w-full rounded-xl object-contain shadow-[0_24px_80px_hsl(0_0%_0%/0.55)]"
+				/>
+			</div>
+		</div>
+	</div>
+{/if}

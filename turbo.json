@@ -1,14 +1,26 @@
 {
 	"$schema": "https://turborepo.com/schema.json",
+	"remoteCache": {
+		"enabled": true
+	},
 	"tasks": {
 		"build": {
-			"outputs": [".svelte-kit/**", "dist/**", ".vercel/**"]
+			"dependsOn": ["^build"],
+			"inputs": ["src/**", "static/**", "*.config.*", "*.json", "!**/node_modules/**"],
+			"outputs": [".svelte-kit/**", "dist/**", ".vercel/**", "build/**"]
+		},
+		"format": {
+			"dependsOn": ["^format"]
+		},
+		"check": {
+			"dependsOn": ["^check"]
+		},
+		"test": {
+			"dependsOn": ["^test"],
+			"cache": false
 		},
 		"dev": {
 			"persistent": true,
-			"cache": false
-		},
-		"check": {
 			"cache": false
 		}
 	}

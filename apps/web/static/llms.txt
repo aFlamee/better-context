@@ -1,0 +1,88 @@
+# btca (Better Context)
+
+> A Bun-powered CLI that answers questions about libraries/frameworks by cloning their repositories locally and querying them (source-first, no web browsing).
+
+`btca` is designed for "what does the code/docs actually do?" questions: it keeps answers up to date by reading the real repository you configure as a *resource*.
+
+It ships:
+- A CLI (built with Effect + Bun)
+- An interactive terminal UI (TUI) for multi-resource Q&A
+- The docs website (`docs.btca.dev`)
+
+## What btca can do
+
+- Ask a single question about configured resources and stream the answer
+- Launch a built-in TUI for multi-turn conversation with `@resource` mentions
+- Manage local config (resources + model/provider)
+- Track conversation threads and indexed collections
+
+## Quickstart
+
+- Install (recommended):
+  - `bun add -g btca`
+- Ask a question:
+  - `btca ask --resource svelte --question 'How do runes work in Svelte 5?'`
+- Run the interactive TUI:
+  - `btca`
+
+## Command reference (CLI)
+
+- `btca` (no args): launch the interactive TUI.
+- `btca --help`: show help.
+- `btca --version` / `btca -v`: print version.
+
+- `btca ask --question '<question>' [--resource <resource>...]`
+  - Ask one question and stream the answer.
+  - `--resource` can be repeated for multiple resources.
+  - Supports @mentions in the question to specify resources.
+
+- `btca resources`
+  - List configured resources.
+
+- `btca connect`
+  - Configure provider/model interactively or via flags.
+
+- `btca add [reference] --name <name> --type <type> [--branch <branch>] [--notes '<specialNotes>'] [--search-path '<path>']`
+  - Add a resource. Type is `git`, `local`, or `npm`.
+  - Git resources use a GitHub URL as `[reference]`, optional `--branch <branch>` (default: main).
+  - Local resources use a local directory path as `[reference]`.
+  - npm resources use an npm reference as `[reference]` (`react`, `npm:@types/node`, or an npmjs package URL).
+- `btca remove [name]`
+  - Remove a resource from config (with confirmation).
+
+- `btca clear`
+  - Clear all locally cloned resources.
+- `btca serve --port <port>`
+  - Start the local server.
+
+## Command reference (built-in TUI)
+
+In the TUI you typically:
+- Ask: `@resource Your question here`
+- Use the command palette for: connect, add, clear, resume
+
+## Configuration (`~/.config/btca/btca.json`)
+
+On first run, btca creates a default config at `~/.config/btca/btca.json`.
+
+Key fields:
+- `resources[]`: array of resources:
+  - Git resources: `name`, `type: "git"`, `url`, `branch`
+  - Local resources: `name`, `type: "local"`, `path`
+  - `specialNotes` (optional): instructions to guide answering
+  - `searchPath` (optional, git only): limit search to a subdirectory
+- `provider` + `model`: provider/model IDs used for answers
+
+## Documentation (docs.btca.dev)
+
+- [Quickstart](https://docs.btca.dev/guides/quickstart): install, connect, first question
+- [Authentication](https://docs.btca.dev/guides/authentication): provider auth + keys
+- [Configuration](https://docs.btca.dev/guides/configuration): config file + resources
+- [API reference](https://docs.btca.dev/api-reference/introduction): endpoints and schema
+
+## Source code & repo layout
+
+- [GitHub repository](https://github.com/bmdavis419/better-context)
+- `apps/cli/`: btca CLI + TUI (Bun + Effect)
+- `apps/web/`: btca.dev SvelteKit site (static)
+- `packages/shared/`: shared constants (e.g. model list)
